@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="YYC Transit">
+<meta name="theme-color" content="#07080f">
+<title>YYC Transit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root {
+  --bg:        #07080f;
+  --card:      #0f1018;
+  --card2:     #171820;
+  --card3:     #1e2030;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.11);
+  --text:      #eeeef8;
+  --text2:     #7878a0;
+  --text3:     #3a3a58;
+
+  /* vibrant accent palette */
+  --blue:      #4f8eff;
+  --blue-glow: rgba(79,142,255,0.28);
+  --blue-dim:  rgba(79,142,255,0.12);
+  --cyan:      #22d4f5;
+  --green:     #2edf8a;
+  --green-dim: rgba(46,223,138,0.12);
+  --amber:     #ffb930;
+  --amber-dim: rgba(255,185,48,0.12);
+  --red:       #ff5474;
+  --red-dim:   rgba(255,84,116,0.12);
+  --purple:    #b06aff;
+
+  --safe-top:  env(safe-area-inset-top, 0px);
+  --safe-bot:  env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Layout ── */
+#app { display: flex; flex-direction: column; height: 100dvh; }
+#map { flex: 1; min-height: 0; z-index: 1; }
+.leaflet-container { background: #05060c; }
+
+/* ── Top Bar ── */
+.topbar {
+  background: rgba(7,8,15,0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 0.5px solid var(--border);
+  padding: 0 18px 12px;
+  padding-top: max(16px, calc(var(--safe-top) + 12px));
+  z-index: 100;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.topbar-row { display: flex; align-items: center; gap: 10px; }
+
+/* Logo */
+.logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; flex-shrink: 0; }
+.logo-yyc { color: var(--text); }
+.logo-transit { color: var(--cyan); }
+.logo-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: 3px; vertical-align: middle; box-shadow: 0 0 8px var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.8)} }
+
+/* Status row */
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.sdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sdot.live  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.sdot.loading { background: var(--amber); animation: blink 0.9s infinite; }
+.sdot.error { background: var(--red); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+/* Refresh btn */
+.refresh-btn {
+  margin-left: auto;
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--card2);
+  border: 0.5px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+}
+.refresh-btn:active { transform: scale(0.9); }
+
+/* ── Admin message banner ── */
+.msg-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+.msg-banner.info    { background: var(--blue-dim);  color: var(--cyan);  display: flex; }
+.msg-banner.warning { background: var(--amber-dim); color: var(--amber); display: flex; }
+.msg-banner.alert   { background: var(--red-dim);   color: var(--red);   display: flex; }
+
+/* ── Map ── */
+.user-dot {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle, var(--cyan) 0%, var(--blue) 100%);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 5px rgba(79,142,255,0.22), 0 2px 10px rgba(0,0,0,0.5);
+}
+.bm {
+  border-radius: 9px;
+  border: 1.5px solid rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+  color: #fff; min-width: 26px; height: 26px; padding: 0 5px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.55);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bm.hi { border-color: #fff; transform: scale(1.25); z-index: 999 !important; box-shadow: 0 0 0 3px rgba(255,255,255,0.25), 0 4px 14px rgba(0,0,0,0.6); }
+
+/* ── FABs ── */
+.fab-group {
+  position: fixed; right: 16px;
+  bottom: calc(168px + max(0px, var(--safe-bot)));
+  display: flex; flex-direction: column; gap: 12px;
+  z-index: 150;
+}
+.fab {
+  width: 50px; height: 50px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.55);
+  cursor: pointer; font-size: 20px;
+  transition: transform 0.12s;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.fab:active { transform: scale(0.9); }
+.fab-locate {
+  background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
+  border-color: rgba(255,255,255,0.2);
+  box-shadow: 0 6px 22px var(--blue-glow);
+}
+
+/* ── Bottom Sheet ── */
+.sheet {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--card);
+  border-radius: 26px 26px 0 0;
+  border-top: 0.5px solid var(--border2);
+  box-shadow: 0 -12px 50px rgba(0,0,0,0.6);
+  z-index: 200;
+  transform: translateY(calc(100% - 152px));
+  transition: transform 0.38s cubic-bezier(0.32,0.72,0,1);
+  max-height: 92dvh;
+  display: flex; flex-direction: column;
+}
+.sheet.peek     { transform: translateY(calc(100% - 240px)); }
+.sheet.expanded { transform: translateY(0); }
+
+.drag-zone {
+  padding: 12px 0 6px;
+  display: flex; justify-content: center;
+  flex-shrink: 0; cursor: grab;
+}
+.drag-pill { width: 40px; height: 4px; border-radius: 2px; background: var(--border2); }
+
+/* Sheet header */
+.sheet-head {
+  padding: 4px 20px 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sheet-head-left { flex: 1; min-width: 0; }
+.sheet-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 21px; font-weight: 800;
+  letter-spacing: -0.4px; color: var(--text);
+  line-height: 1.1;
+}
+.sheet-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+/* Live badge */
+.live-badge {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--green-dim);
+  border: 0.5px solid rgba(46,223,138,0.25);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px; font-weight: 600;
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.live-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: blink 1.2s infinite; }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex; padding: 0 14px 0;
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0; overflow-x: auto; scrollbar-width: none; gap: 4px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  display: flex; align-items: center; gap: 5px;
+  padding: 9px 13px;
+  font-size: 13px; font-weight: 600;
+  color: var(--text3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  background: none; border-top: none; border-left: none; border-right: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab.on { color: var(--text); border-bottom-color: var(--cyan); }
+.tab-icon { font-size: 14px; }
+
+/* ── Sheet content ── */
+.sc {
+  flex: 1; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: max(24px, var(--safe-bot));
+}
+
+/* ── Section label ── */
+.sec-label {
+  padding: 14px 20px 6px;
+  font-size: 11px; font-weight: 700;
+  color: var(--text3); letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ── Bus card ── */
+.bus-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 0.5px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.bus-card:active { background: var(--card2); }
+.bus-card:last-child { border-bottom: none; }
+
+/* left color strip */
+.bus-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 0 2px 2px 0;
+  background: var(--strip-color, transparent);
+}
+
+.rpill {
+  min-width: 48px; height: 34px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  color: #fff; flex-shrink: 0; padding: 0 7px;
+  position: relative; overflow: hidden;
+}
+.rpill::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.1); }
+
+.bus-info { flex: 1; min-width: 0; }
+.bus-head {
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+}
+.bus-meta {
+  font-size: 12px; color: var(--text2); margin-top: 3px;
+  display: flex; align-items: center; gap: 6px;
+}
+.bus-meta-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text3); }
+
+/* ETA badge */
+.eta-wrap { flex-shrink: 0; text-align: right; }
+.eta-num {
+  font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800;
+  line-height: 1; color: var(--cyan);
+}
+.eta-num.now   { color: var(--green); font-size: 18px; }
+.eta-num.far   { color: var(--text2); font-size: 20px; }
+.eta-unit { font-size: 11px; color: var(--text3); }
+
+/* ── Route card (no buses / all routes) ── */
+.route-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 0.5px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.route-card:active { background: var(--card2); }
+.route-card:last-child { border-bottom: none; }
+.rc-info { flex: 1; min-width: 0; }
+.rc-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.rc-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.fav-btn { font-size: 20px; padding: 4px 0 4px 12px; cursor: pointer; flex-shrink: 0; transition: transform 0.15s; }
+.fav-btn:active { transform: scale(1.3); }
+
+/* ── No buses nearby banner ── */
+.no-bus-card {
+  margin: 14px 18px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(79,142,255,0.08), rgba(34,212,245,0.06));
+  border: 0.5px solid rgba(79,142,255,0.22);
+  border-radius: 16px;
+  font-size: 13px; color: var(--text2); line-height: 1.6;
+}
+.no-bus-card strong { color: var(--cyan); }
+
+/* ── Detail view ── */
+.detail-hero {
+  margin: 0;
+  padding: 18px 20px;
+  background: linear-gradient(160deg, var(--card2) 0%, var(--card) 100%);
+  border-bottom: 0.5px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.detail-hero::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  background: var(--hero-color, rgba(79,142,255,0.12));
+  filter: blur(30px);
+  pointer-events: none;
+}
+.detail-top {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px;
+}
+.detail-badge {
+  height: 40px; padding: 0 16px;
+  border-radius: 12px;
+  font-family: 'DM Mono', monospace; font-size: 17px; font-weight: 500;
+  color: #fff; display: flex; align-items: center;
+  flex-shrink: 0;
+}
+.detail-head {
+  font-family: 'Syne', sans-serif;
+  font-size: 19px; font-weight: 800;
+  line-height: 1.2; flex: 1;
+}
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat-box {
+  background: var(--card3);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  position: relative; overflow: hidden;
+}
+.stat-box::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--stat-color, transparent);
+  border-radius: 14px 14px 0 0;
+}
+.stat-lbl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+.stat-val { font-family: 'Syne', sans-serif; font-size: 21px; font-weight: 800; }
+
+/* Detail action buttons */
+.d-actions { padding: 14px 20px 0; display: flex; flex-direction: column; gap: 10px; }
+.d-btn {
+  width: 100%; padding: 14px;
+  border-radius: 14px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer; border: none;
+  transition: opacity 0.15s, transform 0.1s;
+  text-align: center;
+}
+.d-btn:active { transform: scale(0.98); opacity: 0.85; }
+.d-btn-primary { background: linear-gradient(135deg, var(--blue), var(--cyan)); color: #fff; }
+.d-btn-fav { background: var(--card2); color: var(--amber); border: 0.5px solid var(--border2); }
+.d-btn-fav.saved { background: var(--amber-dim); border-color: rgba(255,185,48,0.25); }
+
+/* Delay warning */
+.delay-tag {
+  margin: 0 20px;
+  padding: 10px 14px;
+  background: var(--red-dim);
+  border: 0.5px solid rgba(255,84,116,0.2);
+  border-radius: 12px;
+  font-size: 13px; color: var(--red); font-weight: 600;
+}
+
+/* ── Alert cards ── */
+.alert-card {
+  margin: 10px 18px;
+  padding: 14px 16px;
+  background: var(--amber-dim);
+  border: 0.5px solid rgba(255,185,48,0.2);
+  border-radius: 14px;
+}
+.alert-title { font-size: 14px; font-weight: 700; color: var(--amber); }
+.alert-desc { font-size: 13px; color: var(--text2); margin-top: 5px; line-height: 1.5; }
+.alert-route { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600; background: var(--card3); padding: 3px 9px; border-radius: 6px; color: var(--text2); }
+
+/* ── Empty state ── */
+.empty {
+  padding: 44px 28px;
+  text-align: center;
+  color: var(--text2);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty-icon {
+  width: 64px; height: 64px;
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+  background: var(--card2);
+  border: 0.5px solid var(--border);
+  margin-bottom: 4px;
+}
+.empty-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--text); }
+.empty-text { font-size: 14px; line-height: 1.7; max-width: 280px; }
+
+/* Locate CTA button */
+.locate-cta {
+  margin-top: 6px;
+  padding: 13px 26px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  border-radius: 14px;
+  font-size: 15px; font-weight: 700;
+  color: #fff; cursor: pointer; border: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transition: opacity 0.15s, transform 0.1s;
+  box-shadow: 0 4px 20px var(--blue-glow);
+}
+.locate-cta:active { transform: scale(0.97); }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: calc(168px + max(0px, var(--safe-bot)) + 14px);
+  left: 50%; transform: translateX(-50%) translateY(14px);
+  background: var(--card3);
+  color: var(--text);
+  border: 0.5px solid var(--border2);
+  padding: 10px 20px;
+  border-radius: 26px;
+  font-size: 13px; font-weight: 500;
+  z-index: 999; opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap; pointer-events: none;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.5);
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 0; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="logo">
+        <span class="logo-yyc">YYC</span><span class="logo-transit">Transit</span><span class="logo-dot"></span>
+      </div>
+      <div style="flex:1"></div>
+      <div class="refresh-btn" id="rfab" onclick="doRefresh()">↻</div>
+    </div>
+    <div class="status-row">
+      <div class="sdot loading" id="sdot"></div>
+      <span id="stxt">Connecting to Calgary Transit…</span>
+    </div>
+  </div>
+
+  <!-- Admin message banner (populated from server, no button needed) -->
+  <div class="msg-banner" id="msg-banner">
+    <span id="msg-icon">ℹ️</span>
+    <span id="msg-text"></span>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Locate FAB -->
+  <div class="fab-group">
+    <div class="fab fab-locate" id="lfab" onclick="locateMe()">📍</div>
+  </div>
+
+  <!-- Bottom Sheet -->
+  <div class="sheet" id="sheet">
+    <div class="drag-zone" id="drag-zone"><div class="drag-pill"></div></div>
+
+    <div class="sheet-head">
+      <div class="sheet-head-left">
+        <div class="sheet-title" id="stitle">Buses Near You</div>
+        <div class="sheet-sub" id="ssub">Getting your location…</div>
+      </div>
+      <div class="live-badge" id="live-badge" style="display:none">
+        <div class="live-badge-dot"></div>
+        LIVE
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('nearby')" id="tab-nearby"><span class="tab-icon">📍</span>Near Me</button>
+      <button class="tab" onclick="switchTab('routes')"  id="tab-routes" ><span class="tab-icon">🚌</span>Routes</button>
+      <button class="tab" onclick="switchTab('alerts')"  id="tab-alerts" ><span class="tab-icon">⚠️</span>Alerts</button>
+      <button class="tab" onclick="switchTab('favs')"    id="tab-favs"   ><span class="tab-icon">★</span>Saved</button>
+    </div>
+
+    <div class="sc" id="sc">
+      <div class="empty">
+        <div class="empty-icon">📡</div>
+        <div class="empty-title">Almost there…</div>
+        <div class="empty-text">Connecting to Calgary Transit real-time data.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:3000' : '';
+
+const CALGARY = [51.0447, -114.0719];
+
+// Vivid colour palette indexed by route number
+const COLORS = [
+  '#4f8eff','#ff5474','#2edf8a','#ffb930','#b06aff',
+  '#22d4f5','#ff7c50','#39e0d0','#f950a4','#78e854',
+  '#ff9f40','#5ec8ff','#e055ff','#40e0a0','#ff6060'
+];
+function rc(r) {
+  if (!r) return '#555';
+  if (r === '201' || r === '202') return '#ff2244';
+  if (String(r).toUpperCase().includes('MAX') || String(r).toUpperCase().includes('BRT')) return '#b06aff';
+  const n = parseInt(r);
+  return COLORS[(isNaN(n) ? String(r).charCodeAt(0) : n) % COLORS.length];
+}
+
+// ── State ─────────────────────────────────────────────────────────────────
+let map, userMarker = null;
+let userLat = null, userLng = null;
+let vehicles = [], alerts = [], favs = [], adminToken = null;
+let markers = {}, curTab = 'nearby', sheetState = 'default';
+let nearbyData = null;
+
+// ── Map ───────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { zoomControl: false, attributionControl: false }).setView(CALGARY, 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+  map.on('click', () => { if (sheetState === 'expanded') setSheet('peek'); });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+  document.getElementById('sdot').className = 'sdot ' + state;
+  document.getElementById('stxt').textContent = msg;
+}
+async function apiFetch(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+function setSheet(s) {
+  sheetState = s;
+  const el = document.getElementById('sheet');
+  el.classList.remove('peek','expanded');
+  if (s === 'peek') el.classList.add('peek');
+  else if (s === 'expanded') el.classList.add('expanded');
+}
+
+// ── Data fetch ────────────────────────────────────────────────────────────
+async function loadVehicles() {
+  const d = await apiFetch('/api/vehicles');
+  vehicles = d.vehicles || [];
+}
+async function loadNearby() {
+  if (!userLat || !userLng) return;
+  const d = await apiFetch(`/api/nearby?lat=${userLat}&lng=${userLng}&radius=1.5`);
+  nearbyData = d; vehicles = d.vehicles || vehicles;
+  updateMarkers(d.nearby);
+  renderTab();
+  const n = d.nearby.length;
+  const t = new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+  setStatus('live', `${n} bus${n!==1?'es':''} within 1.5 km · ${t}`);
+  document.getElementById('ssub').textContent = `${vehicles.length} total buses live across Calgary`;
+  document.getElementById('live-badge').style.display = 'flex';
+}
+async function loadAdminMessages() {
+  try {
+    const d = await apiFetch('/api/messages');
+    const msgs = (d.messages||[]).filter(m=>m.active);
+    const banner = document.getElementById('msg-banner');
+    if (msgs.length) {
+      const m = msgs[0];
+      banner.className = 'msg-banner ' + (m.type||'info');
+      document.getElementById('msg-text').textContent = m.text;
+      document.getElementById('msg-icon').textContent = {info:'ℹ️',warning:'⚠️',alert:'🚨'}[m.type]||'ℹ️';
+    } else { banner.style.display='none'; }
+  } catch(e) {}
+}
+
+// ── Refresh ───────────────────────────────────────────────────────────────
+async function doRefresh() {
+  const btn = document.getElementById('rfab');
+  btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.5s';
+  setTimeout(()=>{ btn.style.transform=''; btn.style.transition=''; }, 500);
+  setStatus('loading','Refreshing…');
+  try {
+    await loadVehicles();
+    if (userLat && userLng) await loadNearby();
+    else { updateMarkers(); renderTab(); }
+    const t = new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+    setStatus('live', `${vehicles.length} buses live · ${t}`);
+    await loadAdminMessages();
+  } catch(e) { setStatus('error','Refresh failed — tap ↻ to retry'); }
+}
+
+// ── Markers ───────────────────────────────────────────────────────────────
+function updateMarkers(nearbyList) {
+  const keep = new Set();
+  vehicles.forEach(v => {
+    const id = String(v.id);
+    keep.add(id);
+    const color = rc(v.route);
+    const hi = nearbyList && nearbyList.some(n => n.id === v.id);
+    const rStr = String(v.route||'?');
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="bm${hi?' hi':''}" style="background:${color};min-width:${rStr.length>3?44:26}px">${rStr}</div>`,
+      iconSize: [rStr.length>3?44:26, 26],
+      iconAnchor: [rStr.length>3?22:13, 13]
+    });
+    if (markers[id]) { markers[id].setLatLng([v.lat,v.lng]); markers[id].setIcon(icon); }
+    else {
+      const m = L.marker([v.lat,v.lng],{icon}).addTo(map);
+      m.on('click', ()=>showVehicleDetail(v));
+      markers[id] = m;
+    }
+  });
+  Object.keys(markers).forEach(id=>{ if(!keep.has(id)){map.removeLayer(markers[id]);delete markers[id];} });
+}
+
+// ── Locate ────────────────────────────────────────────────────────────────
+function locateMe() {
+  const btn = document.getElementById('lfab');
+  btn.textContent = '…'; btn.style.fontSize = '16px';
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); btn.textContent='📍'; return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+    if (userMarker) map.removeLayer(userMarker);
+    const ico = L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[20,20],iconAnchor:[10,10]});
+    userMarker = L.marker([userLat,userLng],{icon:ico,zIndexOffset:1000}).addTo(map);
+    map.setView([userLat,userLng],15,{animate:true});
+    btn.textContent='📍'; btn.style.fontSize='20px';
+    loadNearby();
+    switchTab('nearby');
+  }, err => {
+    btn.textContent='📍'; btn.style.fontSize='20px';
+    showToast(err.code===1?'Location access denied':'Could not get location');
+  }, {enableHighAccuracy:true,timeout:10000});
+}
+
+// ── Detail view ───────────────────────────────────────────────────────────
+function showVehicleDetail(v) {
+  const color = rc(v.route);
+  const isFav = favs.includes(v.route);
+  const eta = (nearbyData?.nearby||[]).find(n=>n.id===v.id);
+  const etaMin = eta?.etaMin;
+  const etaDist = eta?.distKm;
+
+  document.getElementById('stitle').textContent = `Route ${v.route}`;
+  document.getElementById('ssub').textContent = eta ? `${etaMin} min · ${etaDist} km away` : (v.headsign||'In service');
+
+  document.getElementById('sc').innerHTML = `
+    <div class="detail-hero" style="--hero-color:${color}22">
+      <div class="detail-top">
+        <div class="detail-badge" style="background:${color}">${v.route}</div>
+        <div class="detail-head">${v.headsign||'In Service'}</div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box" style="--stat-color:${etaMin<=3?'var(--green)':'var(--cyan)'}">
+          <div class="stat-lbl">⏱ Arrives in</div>
+          <div class="stat-val" style="color:${etaMin<=3?'var(--green)':'var(--cyan)'}">${etaMin!=null?etaMin+' min':'—'}</div>
+        </div>
+        <div class="stat-box" style="--stat-color:var(--blue)">
+          <div class="stat-lbl">🚀 Speed</div>
+          <div class="stat-val" style="color:var(--blue)">${v.speed>0?v.speed+' km/h':'Stopped'}</div>
+        </div>
+        <div class="stat-box" style="--stat-color:var(--purple)">
+          <div class="stat-lbl">📍 Status</div>
+          <div class="stat-val" style="color:var(--purple);font-size:14px;padding-top:3px">${fmtStatus(v.status)}</div>
+        </div>
+        <div class="stat-box" style="--stat-color:var(--amber)">
+          <div class="stat-lbl">🚌 Vehicle</div>
+          <div class="stat-val" style="color:var(--amber)">#${v.label||v.id}</div>
+        </div>
+      </div>
+    </div>
+    ${v.delay&&v.delay>60?`<div class="delay-tag" style="margin-top:14px">⚠️ Running ${Math.round(v.delay/60)} min late</div>`:''}
+    <div class="d-actions">
+      <button class="d-btn d-btn-fav ${isFav?'saved':''}" onclick="toggleFav('${v.route}')">
+        ${isFav?'★  Saved to Favourites':'☆  Save Route to Favourites'}
+      </button>
+      <button class="d-btn d-btn-primary" onclick="focusRoute('${v.route}')">
+        Show all Route ${v.route} buses on map →
+      </button>
+    </div>`;
+
+  setSheet('expanded');
+  map.setView([v.lat, v.lng], 16, {animate:true});
+}
+
+function fmtStatus(s) {
+  if (!s) return 'In transit';
+  if (s==='STOPPED_AT') return 'At stop';
+  if (s==='INCOMING_AT') return 'Arriving';
+  return 'In transit';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  curTab = tab;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+tab).classList.add('on');
+  const T = {nearby:'Buses Near You', routes:'All Routes', alerts:'Service Alerts', favs:'Saved Routes'};
+  document.getElementById('stitle').textContent = T[tab]||'';
+  renderTab();
+  if (tab!=='nearby') setSheet('expanded');
+}
+
+function renderTab() {
+  if (curTab==='nearby') renderNearby();
+  else if (curTab==='routes') renderRoutes();
+  else if (curTab==='alerts') renderAlerts();
+  else if (curTab==='favs') renderFavs();
+}
+
+// ── Nearby ────────────────────────────────────────────────────────────────
+function renderNearby() {
+  const sc = document.getElementById('sc');
+  if (!userLat||!userLng) {
+    sc.innerHTML = `<div class="empty">
+      <div class="empty-icon">📍</div>
+      <div class="empty-title">Where are you?</div>
+      <div class="empty-text">Allow location access and we'll show you every bus heading your way with live arrival countdowns.</div>
+      <button class="locate-cta" onclick="locateMe()">📍  Find Buses Near Me</button>
+    </div>`;
+    return;
+  }
+  if (!nearbyData) {
+    sc.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading…</div></div>`;
+    return;
+  }
+  const nearby = nearbyData.nearby || [];
+  const nearbyRoutes = nearbyData.nearbyRoutes || [];
+
+  if (nearby.length > 0) {
+    sc.innerHTML = `<div class="sec-label">Heading your way (${nearby.length})</div>` +
+      nearby.slice(0,30).map(busRow).join('');
+    sc.querySelectorAll('.bus-card').forEach((el,i) => el.addEventListener('click',()=>showVehicleDetail(nearby[i])));
+  } else if (nearbyRoutes.length > 0) {
+    sc.innerHTML = `
+      <div class="no-bus-card">
+        <strong>No buses within 1.5 km right now.</strong><br>
+        Here are routes operating close by — tap any to see them on the map.
+      </div>
+      <div class="sec-label" style="margin-top:6px">Routes within 5 km</div>` +
+      nearbyRoutes.map(routeRow).join('');
+    sc.querySelectorAll('.route-card').forEach((el,i) => el.addEventListener('click',()=>focusRoute(nearbyRoutes[i].route)));
+  } else {
+    sc.innerHTML = `<div class="empty">
+      <div class="empty-icon">🌙</div>
+      <div class="empty-title">No buses nearby</div>
+      <div class="empty-text">No Calgary Transit buses found within 5 km of your current location.</div>
+    </div>`;
+  }
+}
+
+function busRow(v) {
+  const color = rc(v.route);
+  const eta = v.etaMin;
+  const etaCls = eta<=1?'now':eta>15?'far':'';
+  const dist = v.distKm!=null?`${v.distKm} km away`:'';
+  const speed = v.speed>0?`${v.speed} km/h`:'Stopped';
+  return `<div class="bus-card" style="--strip-color:${color}">
+    <div class="rpill" style="background:${color}">${v.route}</div>
+    <div class="bus-info">
+      <div class="bus-head">${(v.headsign||'In Service').slice(0,30)}</div>
+      <div class="bus-meta">${speed}<span class="bus-meta-dot"></span>${dist}</div>
+    </div>
+    <div class="eta-wrap">
+      <div class="eta-num ${etaCls}">${eta<=1?'Now':eta}</div>
+      <div class="eta-unit">${eta<=1?'arriving':'min'}</div>
+    </div>
+  </div>`;
+}
+
+function routeRow(v, showFav=true) {
+  const color = rc(v.route);
+  const isFav = favs.includes(v.route);
+  return `<div class="route-card" style="--strip-color:${color}">
+    <div class="rpill" style="background:${color}">${v.route}</div>
+    <div class="rc-info">
+      <div class="rc-name">Route ${v.route}</div>
+      <div class="rc-meta">${v.distKm?v.distKm+' km away':''}${v.headsign?' · '+v.headsign.slice(0,25):''}</div>
+    </div>
+    ${showFav?`<div class="fav-btn" onclick="event.stopPropagation();toggleFav('${v.route}')" style="color:${isFav?'var(--amber)':'var(--text3)'}">
+      ${isFav?'★':'☆'}
+    </div>`:''}
+  </div>`;
+}
+
+// ── All routes ────────────────────────────────────────────────────────────
+function renderRoutes() {
+  const sc = document.getElementById('sc');
+  const rm = {};
+  vehicles.forEach(v => {
+    if (!rm[v.route]) rm[v.route]={route:v.route,count:0};
+    rm[v.route].count++;
+  });
+  const routes = Object.values(rm).sort((a,b)=>{
+    const an=parseInt(a.route),bn=parseInt(b.route);
+    return(!isNaN(an)&&!isNaN(bn))?an-bn:String(a.route).localeCompare(String(b.route));
+  });
+  if (!routes.length) {
+    sc.innerHTML=`<div class="empty"><div class="empty-icon">🚌</div><div class="empty-title">No data yet</div></div>`;
+    return;
+  }
+  sc.innerHTML = `<div class="sec-label">${routes.length} active routes right now</div>` +
+    routes.map(r => {
+      const color = rc(r.route);
+      const isFav = favs.includes(r.route);
+      const nearby = nearbyData?.nearby.find(v=>v.route===r.route);
+      return `<div class="route-card" onclick="focusRoute('${r.route}')">
+        <div class="rpill" style="background:${color}">${r.route}</div>
+        <div class="rc-info">
+          <div class="rc-name">Route ${r.route}</div>
+          <div class="rc-meta">${r.count} bus${r.count!==1?'es':''} active${nearby?` · ${nearby.etaMin} min from you`:''}</div>
+        </div>
+        <div class="fav-btn" onclick="event.stopPropagation();toggleFav('${r.route}')" style="color:${isFav?'var(--amber)':'var(--text3)'}">
+          ${isFav?'★':'☆'}
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────
+async function renderAlerts() {
+  const sc = document.getElementById('sc');
+  sc.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading…</div></div>`;
+  try { const d = await apiFetch('/api/alerts'); alerts = d.alerts||[]; } catch(e){}
+  if (!alerts.length) {
+    sc.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">All clear!</div><div class="empty-text">No active service alerts. Calgary Transit is running normally.</div></div>`;
+    return;
+  }
+  sc.innerHTML=`<div style="padding-top:10px">`+
+    alerts.map(a=>`<div class="alert-card">
+      <div class="alert-title">⚠️ ${a.header||'Service Alert'}</div>
+      <div class="alert-desc">${a.description||''}</div>
+      ${a.route?`<span class="alert-route">Route ${a.route}</span>`:''}
+    </div>`).join('')+'</div>';
+}
+
+// ── Favourites ────────────────────────────────────────────────────────────
+function renderFavs() {
+  const sc = document.getElementById('sc');
+  if (!favs.length) {
+    sc.innerHTML=`<div class="empty">
+      <div class="empty-icon">★</div>
+      <div class="empty-title">No saved routes</div>
+      <div class="empty-text">Tap ☆ on any route to save it here for one-tap access.</div>
+    </div>`;
+    return;
+  }
+  sc.innerHTML=`<div class="sec-label">Your saved routes</div>`+
+    favs.map(r=>{
+      const color=rc(r);
+      const count=vehicles.filter(v=>v.route===r).length;
+      const nb=nearbyData?.nearby.find(v=>v.route===r);
+      return `<div class="route-card" onclick="focusRoute('${r}')">
+        <div class="rpill" style="background:${color}">${r}</div>
+        <div class="rc-info">
+          <div class="rc-name">Route ${r}</div>
+          <div class="rc-meta">${count} live${nb?` · ${nb.etaMin} min away`:''}</div>
+        </div>
+        <div class="fav-btn" onclick="event.stopPropagation();toggleFav('${r}')" style="color:var(--amber)">★</div>
+      </div>`;
+    }).join('');
+}
+
+// ── Focus route ───────────────────────────────────────────────────────────
+function focusRoute(id) {
+  const rv = vehicles.filter(v=>v.route===id);
+  if (!rv.length) { showToast('No buses on route '+id+' right now'); return; }
+  if (rv.length===1) map.setView([rv[0].lat,rv[0].lng],16,{animate:true});
+  else map.fitBounds(L.latLngBounds(rv.map(v=>[v.lat,v.lng])),{padding:[60,60],animate:true});
+  setSheet('peek');
+  showToast(`Route ${id} · ${rv.length} bus${rv.length!==1?'es':''} on map`);
+}
+
+// ── Favourites toggle ─────────────────────────────────────────────────────
+function toggleFav(route) {
+  const i = favs.indexOf(route);
+  if (i>=0) { favs.splice(i,1); showToast('Removed from saved routes'); }
+  else { favs.push(route); showToast(`★ Route ${route} saved`); }
+  try { localStorage.setItem('yycfavs',JSON.stringify(favs)); } catch(e){}
+  renderTab();
+}
+
+// ── Sheet drag ────────────────────────────────────────────────────────────
+let dy0 = null;
+const dz = document.getElementById('drag-zone');
+dz.addEventListener('touchstart', e=>{ dy0=e.touches[0].clientY; }, {passive:true});
+dz.addEventListener('touchend', e=>{
+  if (dy0===null) return;
+  const dy = e.changedTouches[0].clientY - dy0;
+  if (dy>70) setSheet('default');
+  else if (dy<-40) setSheet('expanded');
+  else if (sheetState==='default') setSheet('peek');
+  else if (sheetState==='peek') setSheet('expanded');
+  dy0=null;
+}, {passive:true});
+dz.addEventListener('click', ()=>{
+  if (sheetState==='expanded') setSheet('peek');
+  else if (sheetState==='peek') setSheet('default');
+  else setSheet('peek');
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async function init(){
+  try { favs=JSON.parse(localStorage.getItem('yycfavs')||'[]'); } catch(e){}
+
+  initMap();
+
+  setStatus('loading','Connecting to Calgary Transit…');
+  try {
+    await loadVehicles();
+    updateMarkers();
+    const t=new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+    setStatus('live',`${vehicles.length} buses live · ${t}`);
+    document.getElementById('ssub').textContent=`${vehicles.length} buses tracked across Calgary`;
+    document.getElementById('live-badge').style.display='flex';
+  } catch(e) {
+    setStatus('error','Cannot connect to server');
+    document.getElementById('sc').innerHTML=`<div class="empty">
+      <div class="empty-icon">⚠️</div>
+      <div class="empty-title">Server not reachable</div>
+      <div class="empty-text">Deploy the backend to Railway and make sure it's running. See HOSTING.md for instructions.</div>
+    </div>`;
+  }
+
+  await loadAdminMessages();
+
+  // Auto-locate on load
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos=>{
+      userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+      const ico=L.divIcon({className:'',html:'<div class="user-dot"></div>',iconSize:[20,20],iconAnchor:[10,10]});
+      userMarker=L.marker([userLat,userLng],{icon:ico,zIndexOffset:1000}).addTo(map);
+      map.setView([userLat,userLng],14,{animate:true});
+      loadNearby();
+    }, ()=>{
+      document.getElementById('ssub').textContent='Tap 📍 to find buses near you';
+    }, {enableHighAccuracy:true,timeout:8000});
+  }
+
+  // Auto-refresh every 30s
+  setInterval(async()=>{
+    try {
+      await loadVehicles();
+      if (userLat&&userLng) await loadNearby();
+      else updateMarkers();
+    } catch(e){}
+  }, 30000);
+})();
+</script>
+</body>
+</html>

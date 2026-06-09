@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+<title>YYC Transit — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #07080f;
+  --card:     #0f1018;
+  --card2:    #171820;
+  --card3:    #1e2030;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.13);
+  --text:     #eeeef8;
+  --text2:    #7878a0;
+  --text3:    #3a3a58;
+  --blue:     #4f8eff;
+  --cyan:     #22d4f5;
+  --green:    #2edf8a;
+  --green-dim:rgba(46,223,138,0.1);
+  --amber:    #ffb930;
+  --amber-dim:rgba(255,185,48,0.1);
+  --red:      #ff5474;
+  --red-dim:  rgba(255,84,116,0.1);
+  --purple:   #b06aff;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  padding: max(20px, calc(var(--safe-top) + 16px)) 0 max(32px, var(--safe-bot));
+}
+
+/* ── Layout ── */
+.page { max-width: 520px; margin: 0 auto; padding: 0 18px; }
+
+/* ── Header ── */
+.header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 0.5px solid var(--border);
+}
+.logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+.logo-yyc { color: var(--text); }
+.logo-transit { color: var(--cyan); }
+.admin-badge {
+  background: var(--red-dim);
+  border: 0.5px solid rgba(255,84,116,0.25);
+  color: var(--red);
+  font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+.header-right { margin-left: auto; }
+.logout-btn {
+  background: var(--card2);
+  border: 0.5px solid var(--border2);
+  color: var(--text2);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 7px 14px; border-radius: 10px;
+  cursor: pointer; transition: color 0.15s;
+}
+.logout-btn:hover { color: var(--red); }
+
+/* ── Login screen ── */
+.login-wrap {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 70dvh; gap: 0;
+}
+.login-card {
+  background: var(--card);
+  border: 0.5px solid var(--border2);
+  border-radius: 24px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 380px;
+  display: flex; flex-direction: column; gap: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.login-icon {
+  width: 60px; height: 60px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  margin-bottom: 4px;
+  box-shadow: 0 8px 24px rgba(79,142,255,0.3);
+}
+.login-title { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -0.4px; }
+.login-sub { font-size: 14px; color: var(--text2); margin-top: -10px; }
+.login-err {
+  background: var(--red-dim); border: 0.5px solid rgba(255,84,116,0.2);
+  border-radius: 10px; padding: 10px 13px;
+  font-size: 13px; color: var(--red); display: none;
+}
+.login-err.show { display: block; }
+
+/* ── Form elements ── */
+.field-label {
+  font-size: 12px; font-weight: 700;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+.input {
+  width: 100%;
+  background: var(--card2);
+  border: 0.5px solid var(--border2);
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px; color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+}
+.input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(79,142,255,0.15);
+}
+.input::placeholder { color: var(--text3); }
+textarea.input { min-height: 90px; resize: none; line-height: 1.5; }
+select.input { cursor: pointer; }
+
+/* ── Buttons ── */
+.btn {
+  width: 100%; padding: 14px;
+  border-radius: 13px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer; border: none;
+  transition: opacity 0.15s, transform 0.1s;
+  text-align: center;
+}
+.btn:active { transform: scale(0.98); opacity: 0.85; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(79,142,255,0.3);
+}
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 0.5px solid rgba(255,84,116,0.2);
+}
+
+/* ── Section ── */
+.section { margin-bottom: 28px; }
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px; font-weight: 800;
+  letter-spacing: -0.3px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+
+/* ── Compose card ── */
+.compose-card {
+  background: var(--card);
+  border: 0.5px solid var(--border2);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.compose-row { display: flex; gap: 10px; }
+.compose-row .field { flex: 1; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+/* Type selector pills */
+.type-pills { display: flex; gap: 8px; }
+.type-pill {
+  flex: 1; padding: 9px;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  text-align: center; cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--card2);
+  color: var(--text2);
+  transition: all 0.15s;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.type-pill.sel-info    { border-color: var(--blue);  background: rgba(79,142,255,0.1);  color: var(--cyan); }
+.type-pill.sel-warning { border-color: var(--amber); background: var(--amber-dim);       color: var(--amber); }
+.type-pill.sel-alert   { border-color: var(--red);   background: var(--red-dim);         color: var(--red); }
+
+/* ── Stats row ── */
+.stats-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+  position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: var(--stat-accent, transparent);
+  border-radius: 14px 14px 0 0;
+}
+.stat-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px; font-weight: 800;
+  line-height: 1;
+}
+.stat-lbl { font-size: 11px; color: var(--text2); margin-top: 4px; font-weight: 600; }
+
+/* ── Active messages ── */
+.msg-list { display: flex; flex-direction: column; gap: 10px; }
+.msg-item {
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  position: relative; overflow: hidden;
+}
+.msg-item::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--msg-color, var(--blue));
+}
+.msg-item-body { flex: 1; min-width: 0; }
+.msg-item-type {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  margin-bottom: 4px;
+  color: var(--msg-color, var(--blue));
+}
+.msg-item-text { font-size: 14px; line-height: 1.5; }
+.msg-item-meta { font-size: 11px; color: var(--text3); margin-top: 5px; }
+.msg-del-btn {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--card2);
+  border: 0.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 13px; color: var(--text2);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.msg-del-btn:hover { background: var(--red-dim); color: var(--red); }
+
+.empty-msgs {
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center; color: var(--text3); font-size: 14px;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: max(28px, var(--safe-bot));
+  left: 50%; transform: translateX(-50%) translateY(14px);
+  background: var(--card3);
+  color: var(--text);
+  border: 0.5px solid var(--border2);
+  padding: 10px 20px; border-radius: 26px;
+  font-size: 13px; font-weight: 500;
+  z-index: 999; opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap; pointer-events: none;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.5);
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Char counter ── */
+.char-count { font-size: 11px; color: var(--text3); text-align: right; }
+.char-count.warn { color: var(--amber); }
+.char-count.over { color: var(--red); }
+
+/* ── Refresh btn ── */
+.refresh-link {
+  font-size: 13px; color: var(--text2);
+  cursor: pointer; text-decoration: underline;
+  text-decoration-color: var(--text3);
+  transition: color 0.15s;
+}
+.refresh-link:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="page">
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-icon">🚌</div>
+        <div>
+          <div class="login-title">Admin Panel</div>
+          <div class="login-sub" style="margin-top:6px">YYCTransit.ca — Staff only</div>
+        </div>
+        <div class="login-err" id="login-err">Incorrect password. Try again.</div>
+        <div class="field">
+          <div class="field-label">Password</div>
+          <input class="input" type="password" id="pw-input" placeholder="Enter admin password"
+            autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary" onclick="doLogin()">Sign In →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<div id="dashboard" style="display:none">
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <div class="logo"><span class="logo-yyc">YYC</span><span class="logo-transit">Transit</span></div>
+      </div>
+      <div class="admin-badge">ADMIN</div>
+      <div class="header-right">
+        <button class="logout-btn" onclick="doLogout()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- Live stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card" style="--stat-accent:var(--green)">
+        <div class="stat-num" id="stat-buses" style="color:var(--green)">—</div>
+        <div class="stat-lbl">Buses Live</div>
+      </div>
+      <div class="stat-card" style="--stat-accent:var(--amber)">
+        <div class="stat-num" id="stat-alerts" style="color:var(--amber)">—</div>
+        <div class="stat-lbl">CT Alerts</div>
+      </div>
+      <div class="stat-card" style="--stat-accent:var(--cyan)">
+        <div class="stat-num" id="stat-msgs" style="color:var(--cyan)">—</div>
+        <div class="stat-lbl">Messages</div>
+      </div>
+    </div>
+
+    <!-- Compose message -->
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-icon" style="background:rgba(79,142,255,0.12)">📢</div>
+        Post a Message
+      </div>
+      <div class="compose-card">
+
+        <!-- Type pills -->
+        <div class="field">
+          <div class="field-label">Message Type</div>
+          <div class="type-pills">
+            <div class="type-pill sel-info" id="pill-info"    onclick="selType('info')">ℹ️ Info</div>
+            <div class="type-pill"          id="pill-warning" onclick="selType('warning')">⚠️ Warning</div>
+            <div class="type-pill"          id="pill-alert"   onclick="selType('alert')">🚨 Alert</div>
+          </div>
+        </div>
+
+        <!-- Message text -->
+        <div class="field">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="field-label">Message</div>
+            <div class="char-count" id="char-count">0 / 280</div>
+          </div>
+          <textarea class="input" id="msg-text"
+            placeholder="e.g. Route 3 detoured via 8th Ave due to road closure. Expect 10 min delays."
+            maxlength="280"
+            oninput="updateCharCount()"></textarea>
+        </div>
+
+        <!-- Expiry -->
+        <div class="field">
+          <div class="field-label">Auto-expire after</div>
+          <select class="input" id="msg-expires">
+            <option value="">Never (remove manually)</option>
+            <option value="30">30 minutes</option>
+            <option value="60" selected>1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="360">6 hours</option>
+            <option value="720">12 hours</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" onclick="postMessage()">
+          📢 &nbsp;Post to All Users
+        </button>
+      </div>
+    </div>
+
+    <!-- Active messages -->
+    <div class="section">
+      <div class="section-title" style="justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="section-title-icon" style="background:rgba(255,185,48,0.1)">📋</div>
+          Active Messages
+        </div>
+        <span class="refresh-link" onclick="loadMsgList()">Refresh</span>
+      </div>
+      <div class="msg-list" id="msg-list">
+        <div class="empty-msgs">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="section">
+      <div class="section-title">
+        <div class="section-title-icon" style="background:var(--red-dim)">⚙️</div>
+        Server
+      </div>
+      <div class="compose-card">
+        <div style="font-size:13px;color:var(--text2);line-height:1.6">
+          Force the server to re-fetch live bus data immediately from Calgary Transit (normally refreshes every 30 seconds automatically).
+        </div>
+        <button class="btn" style="background:var(--card2);color:var(--text);border:0.5px solid var(--border2)" onclick="forceRefresh()">
+          ↻ &nbsp;Force Data Refresh
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = (location.hostname==='localhost'||location.hostname==='127.0.0.1')
+  ? 'http://localhost:3000' : '';
+
+let token = null;
+let selectedType = 'info';
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const pw = document.getElementById('pw-input').value;
+  if (!pw) return;
+
+  try {
+    const res = await fetch(API + '/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    token = data.token;
+    try { sessionStorage.setItem('yyc_admin', token); } catch(e) {}
+    showDashboard();
+  } catch(e) {
+    document.getElementById('login-err').classList.add('show');
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+function doLogout() {
+  token = null;
+  try { sessionStorage.removeItem('yyc_admin'); } catch(e) {}
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'block';
+  document.getElementById('pw-input').value = '';
+  document.getElementById('login-err').classList.remove('show');
+}
+
+async function showDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  await Promise.all([loadStats(), loadMsgList()]);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const d = await (await fetch(API + '/api/status')).json();
+    document.getElementById('stat-buses').textContent = d.vehicles ?? '—';
+    document.getElementById('stat-alerts').textContent = d.alerts ?? '—';
+    document.getElementById('stat-msgs').textContent = d.messages ?? '—';
+  } catch(e) {}
+}
+
+// ── Type selector ─────────────────────────────────────────────────────────
+function selType(t) {
+  selectedType = t;
+  ['info','warning','alert'].forEach(x => {
+    const el = document.getElementById('pill-'+x);
+    el.className = 'type-pill' + (x===t ? ' sel-'+x : '');
+  });
+}
+
+// ── Char count ────────────────────────────────────────────────────────────
+function updateCharCount() {
+  const len = document.getElementById('msg-text').value.length;
+  const el = document.getElementById('char-count');
+  el.textContent = `${len} / 280`;
+  el.className = 'char-count' + (len > 250 ? (len >= 280 ? ' over' : ' warn') : '');
+}
+
+// ── Post message ──────────────────────────────────────────────────────────
+async function postMessage() {
+  const text = document.getElementById('msg-text').value.trim();
+  const expiresIn = parseInt(document.getElementById('msg-expires').value) || null;
+  if (!text) { showToast('Write a message first'); return; }
+
+  try {
+    const res = await fetch(API + '/api/admin/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+      body: JSON.stringify({ text, type: selectedType, expiresIn })
+    });
+    if (!res.ok) throw new Error();
+    document.getElementById('msg-text').value = '';
+    updateCharCount();
+    showToast('✓ Message posted to all users');
+    await Promise.all([loadMsgList(), loadStats()]);
+  } catch(e) {
+    showToast('Failed to post — try again');
+  }
+}
+
+// ── Message list ──────────────────────────────────────────────────────────
+async function loadMsgList() {
+  const list = document.getElementById('msg-list');
+  try {
+    const res = await fetch(API + '/api/admin/messages', {
+      headers: { 'x-admin-token': token }
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const active = (data.messages||[]).filter(m=>m.active);
+
+    if (!active.length) {
+      list.innerHTML = '<div class="empty-msgs">No active messages right now</div>';
+      return;
+    }
+
+    const typeColors = { info: 'var(--blue)', warning: 'var(--amber)', alert: 'var(--red)' };
+    const typeLabels = { info: 'ℹ️ INFO', warning: '⚠️ WARNING', alert: '🚨 ALERT' };
+
+    list.innerHTML = active.map(m => {
+      const color = typeColors[m.type] || 'var(--blue)';
+      const label = typeLabels[m.type] || 'INFO';
+      const posted = new Date(m.createdAt).toLocaleString('en-CA',{
+        month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
+      });
+      const expires = m.expiresAt
+        ? 'Expires ' + new Date(m.expiresAt).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'})
+        : 'No expiry';
+      return `<div class="msg-item" style="--msg-color:${color}">
+        <div class="msg-item-body">
+          <div class="msg-item-type">${label}</div>
+          <div class="msg-item-text">${escHtml(m.text)}</div>
+          <div class="msg-item-meta">Posted ${posted} · ${expires}</div>
+        </div>
+        <div class="msg-del-btn" onclick="deleteMsg('${m.id}')" title="Remove">✕</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty-msgs">Could not load messages</div>';
+  }
+}
+
+async function deleteMsg(id) {
+  try {
+    await fetch(API + '/api/admin/messages/' + id, {
+      method: 'DELETE',
+      headers: { 'x-admin-token': token }
+    });
+    showToast('Message removed');
+    await Promise.all([loadMsgList(), loadStats()]);
+  } catch(e) {
+    showToast('Failed to remove');
+  }
+}
+
+// ── Force refresh ─────────────────────────────────────────────────────────
+async function forceRefresh() {
+  try {
+    const res = await fetch(API + '/api/admin/refresh', {
+      method: 'POST',
+      headers: { 'x-admin-token': token }
+    });
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    showToast(`↻ Refreshed — ${d.vehicles} buses loaded`);
+    await loadStats();
+  } catch(e) {
+    showToast('Refresh failed');
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('on'), 2600);
+}
+
+// ── Escape HTML ───────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(function init() {
+  // Check session
+  try {
+    const saved = sessionStorage.getItem('yyc_admin');
+    if (saved) { token = saved; showDashboard(); return; }
+  } catch(e) {}
+  // Show login
+  document.getElementById('pw-input').focus();
+})();
+</script>
+</body>
+</html>
