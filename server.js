@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -10,105 +9,128 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── In-memory store ───────────────────────────────────────────────────────
 let cachedVehicles = [];
 let cachedAlerts = [];
 let adminMessages = [];
 let lastFetch = 0;
+let fetchError = null;
 
 const ADMIN_PASS = process.env.ADMIN_PASS || 'yyctransit2024';
 
-// Calgary Open Data — JSON endpoints (no protobuf, no CORS issues server-side)
-const VEHICLE_URL = 'https://data.calgary.ca/resource/am7c-qe3u.json?$limit=2000';
-const TRIPS_URL   = 'https://data.calgary.ca/resource/gs4m-mdc2.json?$limit=2000';
+// Calgary Open Data — no API key needed, public JSON
+const VEHICLE_URL = 'https://data.calgary.ca/resource/am7c-qe3u.json?$limit=2000&$order=:id';
 const ALERTS_URL  = 'https://data.calgary.ca/resource/jhgn-ynqj.json?$limit=50';
 
-// ── Haversine distance (km) ───────────────────────────────────────────────
+// ── Haversine ─────────────────────────────────────────────────────────────
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 +
-    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-    Math.sin(dLng/2)**2;
+    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// ── Fetch Calgary Transit data ────────────────────────────────────────────
-async function refreshData() {
+// ── Fetch with timeout ────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
-    console.log('🔄 Fetching Calgary Transit data…');
-
-    const headers = { 'User-Agent': 'YYCTransit/1.0 (yyctransit.ca)' };
-
-    const [vRes, tRes, aRes] = await Promise.allSettled([
-      fetch(VEHICLE_URL, { headers, timeout: 15000 }).then(r => r.json()),
-      fetch(TRIPS_URL,   { headers, timeout: 15000 }).then(r => r.json()),
-      fetch(ALERTS_URL,  { headers, timeout: 15000 }).then(r => r.json())
-    ]);
-
-    // Build trip headsign lookup from trip updates
-    const headsigns = {};
-    if (tRes.status === 'fulfilled' && Array.isArray(tRes.value)) {
-      tRes.value.forEach(t => {
-        const tripId = t.trip_id || t.id;
-        if (tripId && t.trip_headsign) headsigns[tripId] = t.trip_headsign;
-      });
-      console.log(`✅ ${tRes.value.length} trip updates loaded`);
-    }
-
-    // Process vehicles
-    if (vRes.status === 'fulfilled' && Array.isArray(vRes.value)) {
-      cachedVehicles = vRes.value
-        .filter(v => v.latitude && v.longitude)
-        .map(v => {
-          const lat = parseFloat(v.latitude);
-          const lng = parseFloat(v.longitude);
-          const speed = v.speed ? Math.round(parseFloat(v.speed) * 3.6) : 0;
-          const route = v.route_id || v.route_short_name || '';
-          const tripId = v.trip_id || '';
-          return {
-            id:       v.vehicle_id || v.id || `${lat},${lng}`,
-            label:    v.vehicle_label || v.vehicle_id || '',
-            route:    route,
-            tripId:   tripId,
-            headsign: v.trip_headsign || headsigns[tripId] || '',
-            lat,
-            lng,
-            bearing:  v.bearing  ? parseFloat(v.bearing)  : null,
-            speed,
-            status:   v.current_status || 'IN_TRANSIT_TO',
-            stopId:   v.stop_id || '',
-            delay:    0,
-            ts:       v.timestamp || Date.now() / 1000
-          };
-        });
-
-      lastFetch = Date.now();
-      console.log(`✅ ${cachedVehicles.length} vehicles loaded`);
-    } else {
-      console.error('❌ Vehicle fetch failed:', vRes.reason?.message || 'unknown');
-    }
-
-    // Process alerts
-    if (aRes.status === 'fulfilled' && Array.isArray(aRes.value)) {
-      cachedAlerts = aRes.value.map(a => ({
-        id:          a.alert_id || String(Math.random()),
-        header:      a.header_text || 'Service Alert',
-        description: a.description_text || '',
-        route:       a.route_id || '',
-        effect:      a.effect || '',
-        cause:       a.cause  || ''
-      }));
-      console.log(`✅ ${cachedAlerts.length} alerts loaded`);
-    }
-
-  } catch (e) {
-    console.error('❌ refreshData error:', e.message);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'YYCTransit/1.0',
+        'Accept': 'application/json',
+        'X-App-Token': '' // Calgary open data works without token
+      }
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+    const data = await res.json();
+    return data;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
   }
 }
 
-// Refresh on startup and every 30 seconds
+// ── Main refresh ──────────────────────────────────────────────────────────
+async function refreshData() {
+  console.log(`[${new Date().toISOString()}] Fetching Calgary Transit data...`);
+  try {
+    const raw = await fetchJSON(VEHICLE_URL);
+
+    console.log(`Raw response type: ${typeof raw}, isArray: ${Array.isArray(raw)}`);
+    if (Array.isArray(raw)) {
+      console.log(`Got ${raw.length} records. First record keys: ${raw.length > 0 ? Object.keys(raw[0]).join(', ') : 'none'}`);
+    } else {
+      console.log(`Non-array response:`, JSON.stringify(raw).slice(0, 200));
+    }
+
+    if (!Array.isArray(raw)) {
+      throw new Error('Expected array from Calgary API, got: ' + typeof raw);
+    }
+
+    cachedVehicles = raw
+      .filter(v => {
+        // Calgary API uses different field names — log first record to debug
+        return (v.latitude || v.vehicle_latitude) && (v.longitude || v.vehicle_longitude);
+      })
+      .map(v => {
+        // Handle multiple possible field name formats
+        const lat = parseFloat(v.latitude || v.vehicle_latitude || 0);
+        const lng = parseFloat(v.longitude || v.vehicle_longitude || 0);
+        const speed = v.speed ? Math.round(parseFloat(v.speed) * 3.6) : 0;
+        return {
+          id:       v.vehicle_id || v.id || `${lat},${lng}`,
+          label:    v.vehicle_label || v.vehicle_id || '',
+          route:    v.route_id || v.route_short_name || '',
+          tripId:   v.trip_id || '',
+          headsign: v.trip_headsign || '',
+          lat, lng,
+          bearing:  v.bearing  ? parseFloat(v.bearing)  : null,
+          speed,
+          status:   v.current_status || 'IN_TRANSIT_TO',
+          stopId:   v.stop_id || '',
+          delay:    0,
+          ts:       v.timestamp || Date.now() / 1000
+        };
+      });
+
+    lastFetch = Date.now();
+    fetchError = null;
+    console.log(`✅ ${cachedVehicles.length} vehicles loaded successfully`);
+
+    // Fetch alerts separately
+    try {
+      const alertRaw = await fetchJSON(ALERTS_URL);
+      if (Array.isArray(alertRaw)) {
+        cachedAlerts = alertRaw.map(a => ({
+          id:          a.alert_id || String(Math.random()),
+          header:      a.header_text || 'Service Alert',
+          description: a.description_text || '',
+          route:       a.route_id || '',
+          effect:      a.effect || '',
+        }));
+        console.log(`✅ ${cachedAlerts.length} alerts loaded`);
+      }
+    } catch(ae) {
+      console.warn('Alerts fetch failed (non-critical):', ae.message);
+    }
+
+  } catch(e) {
+    fetchError = e.message;
+    console.error(`❌ refreshData failed: ${e.message}`);
+
+    // Retry after 10 seconds if first attempt fails
+    if (cachedVehicles.length === 0) {
+      console.log('Will retry in 10 seconds...');
+      setTimeout(refreshData, 10000);
+    }
+  }
+}
+
+// Start fetching immediately, then every 30s
 refreshData();
 setInterval(refreshData, 30000);
 
@@ -117,12 +139,23 @@ setInterval(refreshData, 30000);
 app.get('/api/status', (req, res) => {
   res.json({
     ok: true,
-    vehicles: cachedVehicles.length,
-    alerts:   cachedAlerts.length,
-    messages: adminMessages.filter(m => m.active).length,
-    lastFetch: lastFetch ? new Date(lastFetch).toISOString() : null,
-    ageSeconds: lastFetch ? Math.round((Date.now() - lastFetch) / 1000) : null
+    vehicles:   cachedVehicles.length,
+    alerts:     cachedAlerts.length,
+    messages:   adminMessages.filter(m => m.active).length,
+    lastFetch:  lastFetch ? new Date(lastFetch).toISOString() : null,
+    ageSeconds: lastFetch ? Math.round((Date.now() - lastFetch) / 1000) : null,
+    error:      fetchError
   });
+});
+
+// Debug endpoint — see raw Calgary API response
+app.get('/api/debug', async (req, res) => {
+  try {
+    const raw = await fetchJSON('https://data.calgary.ca/resource/am7c-qe3u.json?$limit=2');
+    res.json({ ok: true, sample: raw, count: raw.length });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 app.get('/api/vehicles', (req, res) => {
@@ -135,7 +168,6 @@ app.get('/api/nearby', (req, res) => {
   const lat    = parseFloat(req.query.lat);
   const lng    = parseFloat(req.query.lng);
   const radius = parseFloat(req.query.radius) || 1.5;
-
   if (isNaN(lat) || isNaN(lng))
     return res.status(400).json({ error: 'lat and lng required' });
 
@@ -146,29 +178,20 @@ app.get('/api/nearby', (req, res) => {
     return { ...v, distKm: parseFloat(dist.toFixed(2)), etaMin };
   });
 
-  const nearby = withDist
-    .filter(v => v.distKm <= radius)
-    .sort((a, b) => a.etaMin - b.etaMin);
+  const nearby = withDist.filter(v => v.distKm <= radius).sort((a,b) => a.etaMin - b.etaMin);
 
-  // If nothing close, return unique routes within 5km
   let nearbyRoutes = [];
   if (nearby.length === 0) {
     const seen = new Set();
     nearbyRoutes = withDist
       .filter(v => v.distKm <= 5)
-      .sort((a, b) => a.distKm - b.distKm)
+      .sort((a,b) => a.distKm - b.distKm)
       .filter(v => { if (seen.has(v.route)) return false; seen.add(v.route); return true; })
       .slice(0, 20);
   }
 
   res.json({ userLat: lat, userLng: lng, nearby, nearbyRoutes,
              noBusesClose: nearby.length === 0, lastFetch, count: nearby.length });
-});
-
-app.get('/api/vehicle/:id', (req, res) => {
-  const v = cachedVehicles.find(x => x.id === req.params.id);
-  if (!v) return res.status(404).json({ error: 'Vehicle not found' });
-  res.json(v);
 });
 
 app.get('/api/alerts', (req, res) => {
@@ -179,15 +202,13 @@ app.get('/api/messages', (req, res) => {
   res.json({ messages: adminMessages.filter(m => m.active) });
 });
 
-// ── Admin Routes ──────────────────────────────────────────────────────────
-
+// ── Admin ─────────────────────────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
-  if (password === ADMIN_PASS) {
+  if (password === ADMIN_PASS)
     res.json({ ok: true, token: Buffer.from(ADMIN_PASS).toString('base64') });
-  } else {
+  else
     res.status(401).json({ error: 'Invalid password' });
-  }
 });
 
 function adminAuth(req, res, next) {
@@ -206,7 +227,7 @@ app.post('/api/admin/messages', adminAuth, (req, res) => {
     type: ['info','warning','alert'].includes(type) ? type : 'info',
     active: true,
     createdAt: new Date().toISOString(),
-    expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 60000).toISOString() : null
+    expiresAt: expiresIn ? new Date(Date.now() + expiresIn*60000).toISOString() : null
   };
   adminMessages.unshift(msg);
   if (adminMessages.length > 20) adminMessages = adminMessages.slice(0, 20);
@@ -230,7 +251,7 @@ app.get('/api/admin/messages', adminAuth, (req, res) => {
 
 app.post('/api/admin/refresh', adminAuth, async (req, res) => {
   await refreshData();
-  res.json({ ok: true, vehicles: cachedVehicles.length });
+  res.json({ ok: true, vehicles: cachedVehicles.length, error: fetchError });
 });
 
 app.get('*', (req, res) => {
