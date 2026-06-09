@@ -41,7 +41,7 @@ async function fetchJSON(url) {
       headers: {
         'User-Agent': 'YYCTransit/1.0',
         'Accept': 'application/json',
-        'X-App-Token': '' // Calgary open data works without token
+        'X-App-Token': process.env.CALGARY_APP_TOKEN || ''
       }
     });
     clearTimeout(timer);
